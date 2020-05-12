@@ -1,0 +1,459 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<title>Circuit solver</title>
+	<script src="https://unpkg.com/mathjs/dist/math.min.js"></script>
+</head>
+<body>
+
+<input type="file" id="file" name="file" />
+<br><br>Netlist:<br>
+<textarea id="netlist" rows="15" cols="15"></textarea>
+<br><br>
+Voltages at clicked nodes: <br>
+<textarea id="output"  cols="30" rows="5"></textarea>
+<br>
+<canvas id="myCanvas" width="1000" height="500"
+style="border:1px solid #c3c3c3;">
+Your browser does not support the canvas element.
+</canvas>
+
+<!---------------------------------------------------------------------------------------->
+<!---------------------------------------------------------------------------------------->
+<!----------------------------------- Start of script ------------------------------------>
+<!---------------------------------------------------------------------------------------->
+
+<script>
+//-----------------------------------------------------------------------------------
+//                                     Read file
+//-----------------------------------------------------------------------------------
+var lines, n
+document.getElementById('file').onchange = function(){
+
+var file = this.files[0];
+var no_of_nodes=0;
+var resistors=[];
+var curr_sources=[];
+var volt_sources=[];	
+
+var reader = new FileReader();
+reader.onload = function(progressEvent){   // read the netlist and display it on the window
+	var num = 0;
+	var N = 0;
+	lines = this.result.split('\n');
+	n=lines.length;
+	//document.getElementById("netlist").innerHTML +="Netlist:\n\n";
+	// find number of nodes and display the netlist in browser 
+	for(var line = 0; line < n; line++){
+		words = lines[line].split(" ");
+		if((words[0])[0]=='r'){
+			n1=parseInt(words[1]);
+			n2=parseInt(words[2]);
+			num=Math.max(n1,n2);
+			N=Math.max(num,N);
+			r=parseFloat(words[3]);
+			resistors.push({res:r,n1:n1,n2:n2});
+		}
+		else if((words[0])[0]=='i'){
+			n1=parseInt(words[1]);
+			n2=parseInt(words[2]);
+			num=Math.max(n1,n2);
+			N=Math.max(num,N);
+			i=parseFloat(words[3]);
+			curr_sources.push({curr:i,n1:n1,n2:n2});
+		}
+		else if((words[0])[0]=='v'){
+			n1=parseInt(words[1]);
+			n2=parseInt(words[2]);
+			num=Math.max(n1,n2);
+			N=Math.max(num,N);
+			v=parseFloat(words[3]);
+			volt_sources.push({volt:v,n1:n1,n2:n2});
+		}
+	  	document.getElementById("netlist").innerHTML += lines[line]+"\n";
+	}
+    no_of_nodes = N+1;
+	
+//-----------------------------------------------------------------------------------
+//                            Display the circuit schematic
+//-----------------------------------------------------------------------------------
+
+var canvas = document.getElementById("myCanvas");
+var connections = math.zeros(no_of_nodes,no_of_nodes);
+var ctx = canvas.getContext("2d");
+ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+var nodes_pos = set_nodes(ctx,no_of_nodes);
+for(var index=0; index<resistors.length; index++){  // resistors
+	var n1=resistors[index].n1;
+	var n2=resistors[index].n2;
+	var r = resistors[index].res;
+	connections=disp_resistor(ctx,nodes_pos,n1,n2,r,connections,no_of_nodes);	
+}
+for(var index=0; index<volt_sources.length; index++){  // voltage sources
+	var n1=volt_sources[index].n1;
+	var n2=volt_sources[index].n2;
+	var v =volt_sources[index].volt;
+	connections=disp_volt(ctx,nodes_pos,n1,n2,v,connections,no_of_nodes);	
+}
+for(var index=0; index<curr_sources.length; index++){  //current sources
+	var n1=curr_sources[index].n1;
+	var n2=curr_sources[index].n2;
+	var i =curr_sources[index].curr;
+	connections=disp_curr(ctx,nodes_pos,n1,n2,i,connections,no_of_nodes);	
+}
+
+//-----------------------------------------------------------------------------------
+//                                   Solve the circuit
+//-----------------------------------------------------------------------------------
+	/*
+	using modified nodal analysis
+
+	 	A = [[G B]  G is conductance matrix, B is incidence matrix of nodes and voltage sources
+			 [C D]]	C is transpose of B, D is just zeros (these change if dependent sources are present)
+		Z = [[i]  	i is sum of currents entering a node
+			 [e]]   e is value of voltage sources
+		X = [[v]	v holds unknown voltages
+			 [j]]   j holds unknown current through voltage sources
+
+			AX=Z*/
+
+	var N=no_of_nodes;
+	var M=volt_sources.length;;
+
+	// for A
+	var G_temp=math.zeros(N,N)
+	var B_temp=math.zeros(N,M)
+	var D=math.zeros(M,M)  	 // final D
+
+	// for X
+	var I_temp=math.zeros(N)
+	var E=math.zeros(M)   	 // final E  
+
+	for(var index=0; index<resistors.length; index++){  // resistors
+		var n1=resistors[index].n1;
+		var n2=resistors[index].n2;
+		var r = resistors[index].res;
+		G_temp.subset(math.index(n1,n1),math.subset(G_temp,math.index(n1,n1))+1/r);
+		G_temp.subset(math.index(n1,n2),math.subset(G_temp,math.index(n1,n2))-1/r);
+		G_temp.subset(math.index(n2,n1),math.subset(G_temp,math.index(n2,n1))-1/r);
+		G_temp.subset(math.index(n2,n2),math.subset(G_temp,math.index(n2,n2))+1/r);
+	}
+	var G = G_temp.subset(math.index(math.range(1,N),math.range(1,N)));  // final G
+
+	var ind=0;
+	for(var index=0; index<volt_sources.length; index++){  // voltage sources
+		var n1=volt_sources[index].n1;
+		var n2=volt_sources[index].n2;
+		var v =volt_sources[index].volt;
+		B_temp.subset(math.index(n1,ind),1);	
+		B_temp.subset(math.index(n2,ind),-1);
+		E.subset(math.index(ind),v);
+		ind+=1;
+	}
+	var B = B_temp.subset(math.index(math.range(1,N),math.range(0,M)));  // final B
+	var C = math.transpose(B);           // final C
+
+	var A1 = math.concat(G,B);
+	var A2 = math.concat(C,D);
+	var A = math.concat(A1,A2,0);        // final A
+
+	for(var index=0; index<curr_sources.length; index++){  //current sources
+		var n1=curr_sources[index].n1;
+		var n2=curr_sources[index].n2;
+		var i =curr_sources[index].curr;
+		I_temp.subset(math.index(n1),math.subset(I_temp,math.index(n1))-i);
+		I_temp.subset(math.index(n2),math.subset(I_temp,math.index(n2))+i);
+	}
+	var I = I_temp.subset(math.index(math.range(1,N)));   // final I
+	var Z = math.concat(I,E,0);			// final Z
+	var A_inv = math.inv(A);			
+	var X = math.multiply(A_inv,Z);		// final X
+
+	var V = math.concat([0],X.subset(math.index(math.range(0,N-1))),0);  // final voltages at nodes
+
+	// display
+	// for(var index=0; index<N; index++){
+	// 	document.getElementById("output").innerHTML += "Voltage at node "+index+" = "+math.subset(V,math.index(index))+"V\n";
+	// }
+	// for(var index=1; index<=M; index++){
+	// 	document.getElementById("output").innerHTML += "Current through voltage source "+index+" = "+math.subset(X,math.index(index+N-2))+"A\n";
+	// }
+
+//-----------------------------------------------------------------------------------
+//                             Identify node and show voltage
+//-----------------------------------------------------------------------------------
+
+
+canvas.addEventListener('click', (e) => {      // identify the node that is clicked
+	var rect = canvas.getBoundingClientRect()
+    var x = e.clientX-rect.left;
+	var y = e.clientY-rect.top;
+	node = detect_node(x,y,nodes_pos,no_of_nodes);
+	if(node>-1){
+		document.getElementById("output").innerHTML +="Node: "+node.toString()+","+"Voltage: "+math.subset(V,math.index(node)).toFixed(2)+" V\n";
+	}
+});
+
+//-----------------------------------------------------------------------------------
+//                        				End of main code
+//-----------------------------------------------------------------------------------
+
+};
+reader.readAsText(file);
+};
+
+//-----------------------------------------------------------------------------------
+//--------------------- Some functions that are used in the code --------------------
+//-----------------------------------------------------------------------------------
+
+
+function disp_resistor(ctx,nodes_pos,n1,n2,r,connections,N){  // display resistors
+	var n1_x=nodes_pos[n1].x;
+	var n1_y=nodes_pos[n1].y;
+	var n2_x=nodes_pos[n2].x;
+	var n2_y=nodes_pos[n2].y;
+	var len=50;
+	var mid_x=(n1_x+n2_x)/2;
+	var mid_y=(n1_y+n2_y)/2;
+	var angle = Math.atan2(n2_y-n1_y,n2_x-n1_x);
+	var x_new = n1_x;
+	var y_new = n1_y;
+	ctx.moveTo(x_new,y_new);
+
+	var shift=elt(connections,n1,n2)+elt(connections,n2,n1);
+	var sep = 80*Math.abs(n1-n2);
+	if((n1== 0 || n2 == 0)&&(n1>N/2 || n2> N/2)){
+		sep = 80*N-sep;
+	}
+	// to deal with parallel components
+	if((n1!=0 && n2!=0 && n2>n1) || (n2==0 && n1>N/2) || (n1==0 && n2<=N/2)){
+		for(var i = 0; i<shift;i++){
+			x_new -= sep*Math.sin(angle);
+			y_new += sep*Math.cos(angle);
+		}
+	}
+	else{ //if((n1!=0 && n2!=0 && n1>n2) || (n1==0 && n2>N/2) || (n2==0 && n1<=N/2)){
+		for(var i = 0; i<shift;i++){
+			x_new += sep*Math.sin(angle);
+			y_new -= sep*Math.cos(angle);
+		}		
+	}
+	// draw the resistor
+	ctx.lineTo(x_new,y_new);
+	x_new=mid_x-n1_x-len/2*Math.cos(angle)+x_new;
+	y_new=mid_y-n1_y-len/2*Math.sin(angle)+y_new;
+	ctx.lineTo(x_new,y_new);
+	for(var i = 0; i<4;i++){
+		x_new+=len/8*Math.cos(angle-Math.PI/3);
+		y_new+=len/8*Math.sin(angle-Math.PI/3);
+		ctx.lineTo(x_new,y_new);
+		x_new+=len/4*Math.cos(Math.PI/3+angle);
+		y_new+=len/4*Math.sin(Math.PI/3+angle);
+		ctx.lineTo(x_new,y_new);
+		x_new+=len/8*Math.cos(angle-Math.PI/3);
+		y_new+=len/8*Math.sin(angle-Math.PI/3);
+		ctx.lineTo(x_new,y_new);
+	}
+	// again to deal with parallel components
+	x_new = n2_x;
+	y_new = n2_y;
+	if((n1!=0 && n2!=0 && n2>n1) || (n2==0 && n1>N/2) || (n1==0 && n2<=N/2)){
+		for(var i = 0; i<shift;i++){
+			x_new -= sep*Math.sin(angle);
+			y_new += sep*Math.cos(angle);
+		}
+	}
+	else if((n1!=0 && n2!=0 && n1>n2) || (n1==0 && n2>N/2) || (n2==0 && n1<=N/2)){
+		for(var i = 0; i<shift;i++){
+			x_new += sep*Math.sin(angle);
+			y_new -= sep*Math.cos(angle);
+		}		
+	}	
+	
+	ctx.lineTo(x_new,y_new);
+	ctx.lineTo(n2_x,n2_y);
+	ctx.stroke();
+	connections.subset(math.index(n1,n2),math.subset(connections,math.index(n1,n2))+1);
+	return connections;      
+}
+
+function disp_volt(ctx,nodes_pos,n1,n2,v,connections,N){ // display voltage sources
+	var n1_x=nodes_pos[n1].x;
+	var n1_y=nodes_pos[n1].y;
+	var n2_x=nodes_pos[n2].x;
+	var n2_y=nodes_pos[n2].y;
+	var len=40;
+	
+	var angle = Math.atan2(n2_y-n1_y,n2_x-n1_x);
+	ctx.moveTo(n1_x,n1_y);
+	var n1_x_new = n1_x;
+	var n1_y_new = n1_y;
+	var n2_x_new = n2_x;
+	var n2_y_new = n2_y;
+
+	var shift=elt(connections,n1,n2)+elt(connections,n2,n1);
+	var sep = 80*Math.abs(n1-n2);
+	if((n1== 0 || n2 == 0)&&(n1>N/2 || n2> N/2)){
+		sep = 80*N-sep;
+	}
+	if((n1!=0 && n2!=0 && n2>n1) || (n2==0 && n1>N/2) || (n1==0 && n2<=N/2)){
+		for(var i = 0; i<shift;i++){
+			n1_x_new -= sep*Math.sin(angle);
+			n1_y_new += sep*Math.cos(angle);
+			n2_x_new -= sep*Math.sin(angle);
+			n2_y_new += sep*Math.cos(angle);
+		}
+	}
+	else if((n1!=0 && n2!=0 && n1>n2) || (n1==0 && n2>N/2) || (n2==0 && n1<=N/2)){
+		for(var i = 0; i<shift;i++){
+			n1_x_new += sep*Math.sin(angle);
+			n1_y_new -= sep*Math.cos(angle);
+			n2_x_new += sep*Math.sin(angle);
+			n2_y_new -= sep*Math.cos(angle);
+		}		
+	}	
+	ctx.lineTo(n1_x_new,n1_y_new);
+	var mid_x=(n1_x_new+n2_x_new)/2;
+	var mid_y=(n1_y_new+n2_y_new)/2;
+	ctx.lineTo(mid_x-len/2*Math.cos(angle),mid_y-len/2*Math.sin(angle));
+	// draw circle
+	ctx.moveTo(mid_x+len/2,mid_y);
+	ctx.arc(mid_x, mid_y, len/2, 0, 2 * Math.PI);
+	//put + 
+	ctx.moveTo(mid_x-3*len/8*Math.cos(angle),mid_y-3*len/8*Math.sin(angle));
+	ctx.lineTo(mid_x-len/8*Math.cos(angle),mid_y-len/8*Math.sin(angle));
+	var x_new=mid_x-len/4*Math.cos(angle);
+	var y_new=mid_y-len/4*Math.sin(angle);
+	x_new = x_new-len/8*Math.sin(angle);
+	y_new = y_new+len/8*Math.cos(angle); 
+	ctx.moveTo(x_new,y_new);
+	ctx.lineTo(x_new+len/4*Math.sin(angle),y_new-len/4*Math.cos(angle));
+	// put -
+	var x_new=mid_x+len/4*Math.cos(angle);
+	var y_new=mid_y+len/4*Math.sin(angle);
+	x_new = x_new+len/8*Math.sin(angle);
+	y_new = y_new-len/8*Math.cos(angle); 
+	ctx.moveTo(x_new,y_new);
+	ctx.lineTo(x_new-len/4*Math.sin(angle),y_new+len/4*Math.cos(angle));
+	
+	ctx.moveTo(mid_x+len/2*Math.cos(angle),mid_y+len/2*Math.sin(angle));
+	ctx.lineTo(n2_x_new,n2_y_new);
+	ctx.lineTo(n2_x,n2_y);
+	ctx.stroke();
+	connections.subset(math.index(n1,n2),math.subset(connections,math.index(n1,n2))+1);
+	return connections;
+}
+
+function disp_curr(ctx,nodes_pos,n1,n2,i,connections,N){ // display current sources
+	var n1_x=nodes_pos[n1].x;
+	var n1_y=nodes_pos[n1].y;
+	var n2_x=nodes_pos[n2].x;
+	var n2_y=nodes_pos[n2].y;
+	var len=40;
+	var angle = Math.atan2(n2_y-n1_y,n2_x-n1_x);
+	ctx.moveTo(n1_x,n1_y);
+
+	var n1_x_new = n1_x;
+	var n1_y_new = n1_y;
+	var n2_x_new = n2_x;
+	var n2_y_new = n2_y;
+
+	var shift=elt(connections,n1,n2)+elt(connections,n2,n1);
+	var sep = 80*Math.abs(n1-n2);
+	if((n1== 0 || n2 == 0)&&(n1>N/2 || n2> N/2)){
+		sep = 80*N-sep;
+	}
+	if((n1!=0 && n2!=0 && n2>n1) || (n2==0 && n1>N/2) || (n1==0 && n2<=N/2)){
+		for(var i = 0; i<shift;i++){
+			n1_x_new -= sep*Math.sin(angle);
+			n1_y_new += sep*Math.cos(angle);
+			n2_x_new -= sep*Math.sin(angle);
+			n2_y_new += sep*Math.cos(angle);
+		}
+	}
+	else if((n1!=0 && n2!=0 && n1>n2) || (n1==0 && n2>N/2) || (n2==0 && n1<=N/2)){
+		for(var i = 0; i<shift;i++){
+			n1_x_new += sep*Math.sin(angle);
+			n1_y_new -= sep*Math.cos(angle);
+			n2_x_new += sep*Math.sin(angle);
+			n2_y_new -= sep*Math.cos(angle);
+		}		
+	}
+	ctx.lineTo(n1_x_new,n1_y_new);
+	var mid_x=(n1_x_new+n2_x_new)/2;
+	var mid_y=(n1_y_new+n2_y_new)/2;	
+	ctx.lineTo(mid_x-len/2*Math.cos(angle),mid_y-len/2*Math.sin(angle));
+	// draw circle
+	ctx.moveTo(mid_x+len/2,mid_y);
+	ctx.arc(mid_x, mid_y, len/2, 0, 2 * Math.PI);
+	
+	// put line
+	ctx.moveTo(mid_x-3*len/8*Math.cos(angle),mid_y-3*len/8*Math.sin(angle));
+	ctx.lineTo(mid_x+3*len/8*Math.cos(angle),mid_y+3*len/8*Math.sin(angle));
+	
+	// put arrowhead
+	var x_new=mid_x+len/4*Math.cos(angle);
+	var y_new=mid_y+len/4*Math.sin(angle);
+	x_new = x_new+len/8*Math.sin(angle);
+	y_new = y_new-len/8*Math.cos(angle); 
+	ctx.lineTo(x_new,y_new);
+	x_new=mid_x+len/4*Math.cos(angle);
+	y_new=mid_y+len/4*Math.sin(angle);
+	x_new = x_new-len/8*Math.sin(angle);
+	y_new = y_new+len/8*Math.cos(angle); 
+	ctx.moveTo(x_new,y_new);
+	ctx.lineTo(mid_x+3*len/8*Math.cos(angle),mid_y+3*len/8*Math.sin(angle));
+	
+
+	ctx.moveTo(mid_x+len/2*Math.cos(angle),mid_y+len/2*Math.sin(angle));
+	ctx.lineTo(n2_x_new,n2_y_new);
+	ctx.lineTo(n2_x,n2_y);
+	ctx.stroke();
+	connections.subset(math.index(n1,n2),math.subset(connections,math.index(n1,n2))+1);
+	return connections;
+}
+
+function set_nodes(ctx,n){   // set the nodes on a blank screen
+	var nodes=[];
+	var theta=2*Math.PI/n;
+	var curr_theta=theta;
+	var x_0=500;
+	var y_0=250;
+	var R=120;
+    for(var index=0; index<n; index++){
+		var x=x_0+R*Math.sin(curr_theta);
+		var y=y_0+R*Math.cos(curr_theta);
+		nodes.push({x:x,y:y});
+		curr_theta=curr_theta+theta;
+		ctx.moveTo(x+3,y);              // radius of node 
+		ctx.arc(x,y,6,0,2*Math.PI);     // is 6
+		ctx.fillStyle='red';
+		ctx.fill();
+	}
+	return nodes;
+}
+
+function detect_node(x,y,nodes_pos){  // identify the node which is clicked
+	for(var index=0; index<nodes_pos.length; index++){
+		var x1=nodes_pos[index].x;
+		var y1=nodes_pos[index].y;
+		if(Math.sqrt(Math.pow(x-x1,2)+Math.pow(y-y1,2)) < 9){ // radius of node is 6, relax it a little 
+			return index;
+		}
+	}
+	return -1;
+}
+
+function elt(A, n1, n2){     // return element at position (n1,n2) in matrix A
+	return math.subset(A,math.index(n1,n2));
+}
+
+
+</script> 
+<!---------------------------------------------------------------------------------------->
+<!---------------------------------------------------------------------------------------->
+<!----------------------------------- End of script -------------------------------------->
+<!---------------------------------------------------------------------------------------->
+</body>
+</html>
