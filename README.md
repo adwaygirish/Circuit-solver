@@ -20,6 +20,8 @@ Now simply click on the nodes and the voltages at those particular nodes will be
 <img src="readme_imgs/after_clicking.png" alt="drawing" width="200"/>
 </center>
 
+Refresh the page before trying again with a different netlist.
+
 ___
 
 The arrangements of nodes is done in a circular manner, clockwise. This was chosen so that the number of crossing-overs would be minimized. However, this does not work satisfactorily when the number of nodes are large. Any other general configuration of nodes, on the other hand, would lead to a mess in the centre. Some smart way of arranging the nodes which takes into account the number of components attached to each node would be an improvement. 
