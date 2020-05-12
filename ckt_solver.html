@@ -172,10 +172,11 @@ for(var index=0; index<curr_sources.length; index++){  //current sources
 
 	var V = math.concat([0],X.subset(math.index(math.range(0,N-1))),0);  // final voltages at nodes
 
-	// display
+	// to see all voltages without clicking
 	// for(var index=0; index<N; index++){
 	// 	document.getElementById("output").innerHTML += "Voltage at node "+index+" = "+math.subset(V,math.index(index))+"V\n";
 	// }
+	// can also see the currents through the voltage sources
 	// for(var index=1; index<=M; index++){
 	// 	document.getElementById("output").innerHTML += "Current through voltage source "+index+" = "+math.subset(X,math.index(index+N-2))+"A\n";
 	// }
@@ -191,12 +192,12 @@ canvas.addEventListener('click', (e) => {      // identify the node that is clic
 	var y = e.clientY-rect.top;
 	node = detect_node(x,y,nodes_pos,no_of_nodes);
 	if(node>-1){
-		document.getElementById("output").innerHTML +="Node: "+node.toString()+","+"Voltage: "+math.subset(V,math.index(node)).toFixed(2)+" V\n";
+		document.getElementById("output").innerHTML +="Node: "+node.toString()+", Voltage: "+math.subset(V,math.index(node)).toFixed(2)+" V\n";
 	}
 });
 
 //-----------------------------------------------------------------------------------
-//                        				End of main code
+//                        	End of main code
 //-----------------------------------------------------------------------------------
 
 };
