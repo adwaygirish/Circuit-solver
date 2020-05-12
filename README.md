@@ -1,4 +1,4 @@
-# Circuit-solver
+# Circuit Solver
 
 This is a web-based circuit simulator which imports a netlist as a text file (<a href="netlist.txt">netlist.txt</a> is a sample), solves the circuit, and displays a schematic diagram for the circuit.  
 The nodes as mentioned in the netlist are shown as red circles. The voltage at a particular node is displayed when that node is clicked.
