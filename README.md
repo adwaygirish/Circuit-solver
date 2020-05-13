@@ -1,6 +1,6 @@
 # Circuit Solver
 
-This is a web-based circuit simulator which imports a netlist as a text file (<a href="https://github.com/adwaygirish/Circuit-solver/blob/master/netlist.txt">netlist.txt</a> is a sample), solves the circuit, and displays a schematic diagram for the circuit.  
+This is a web-based circuit simulator which imports a netlist as a text file (<a href="https://github.com/adwaygirish/Circuit-solver/blob/master/netlist.txt">netlist.txt</a> is a sample), solves the circuit for node voltages, and displays a schematic diagram for the circuit.  
 The nodes as mentioned in the netlist are shown as red circles. The voltage at a particular node is displayed when that node is clicked.
 
 The circuit is solved using <a href="https://www.swarthmore.edu/NatSci/echeeve1/Ref/mna/MNA3.html">modified nodal analysis</a>. The circuit may only contain ideal, independent, constant current and voltage sources, and resistors. I hope to include more features soon. 
