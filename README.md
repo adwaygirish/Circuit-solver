@@ -5,7 +5,7 @@ The nodes as mentioned in the netlist are shown as red circles. The voltage at a
 
 The circuit is solved using <a href="https://www.swarthmore.edu/NatSci/echeeve1/Ref/mna/MNA3.html">modified nodal analysis</a>. The circuit may only contain ideal, independent, constant current and voltage sources, and resistors. I hope to include more features soon. 
 
-To run this circuit solver, download or copy-paste the contents of <a href="https://github.com/adwaygirish/Circuit-solver/blob/master/ckt_solver.html">ckt_solver.html</a>, save it with a .html extension, and open it in a web browser. You should see something like this-<br>
+To run this circuit solver, click <a href="ckt_solver.html">here</a>. You may also download or copy-paste the contents of <a href="https://github.com/adwaygirish/Circuit-solver/blob/master/ckt_solver.html">ckt_solver.html</a>, save it with a .html extension, and open it in a web browser. You should see something like this-<br>
 <center>
 <img src="readme_imgs/on_opening.png" alt="drawing" width="350"/>
 </center>
