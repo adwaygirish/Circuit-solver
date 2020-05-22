@@ -2,22 +2,45 @@
 <html>
 <head>
 	<title>Circuit solver</title>
-	<script src="https://unpkg.com/mathjs/dist/math.min.js"></script>
-</head>
+	<!-- for online: -->
+		<script src="//ajax.googleapis.com/ajax/libs/jquery/2.0.0/jquery.min.js"></script>
+		<script src="https://unpkg.com/mathjs/dist/math.min.js"></script>
+	<!-- for offline (if you have these packages downloaded, change the file path accordingly): -->
+	<!-- 	<script src="/home/adway/js_stuff/node_modules/jquery/dist/jquery.min.js"></script>
+		<script src="/home/adway/js_stuff/node_modules/mathjs/dist/math.min.js"></script> -->
+	<style>
+		#wrapper {         /*to include tooltip with the canvas*/
+		    position:relative;
+		    width:300px;
+		    height:150px;
+		}
+		canvas {
+		    border:1px solid red;
+		}
+		#tip { 				/*for tooltip*/
+		    background-color:white;
+		    border:1px solid blue;
+		    position:absolute;
+		    left:-400px;
+    		top:100px;
+		}
+</style>
 <body>
 
-<input type="file" id="file" name="file" />
-<br><br>Netlist:<br>
+
+<br>Enter the Netlist:<br>
 <textarea id="netlist" rows="15" cols="15"></textarea>
+<button onclick="solver()">Solve</button>
+
 <br><br>
-Voltages at clicked nodes: <br>
-<textarea id="output"  cols="30" rows="5"></textarea>
-<br>
+
+<div id="wrapper">
 <canvas id="myCanvas" width="1000" height="500"
 style="border:1px solid #c3c3c3;">
 Your browser does not support the canvas element.
 </canvas>
-
+<canvas id="tip" width=200 height=30></canvas>
+</div>
 <!---------------------------------------------------------------------------------------->
 <!---------------------------------------------------------------------------------------->
 <!----------------------------------- Start of script ------------------------------------>
@@ -27,22 +50,19 @@ Your browser does not support the canvas element.
 //-----------------------------------------------------------------------------------
 //                                     Read file
 //-----------------------------------------------------------------------------------
-var lines, n
-document.getElementById('file').onchange = function(){
+function solver(){ 
 
-var file = this.files[0];
+var lines, n
+var file = document.getElementById("netlist").value;
 var no_of_nodes=0;
 var resistors=[];
 var curr_sources=[];
 var volt_sources=[];	
-
-var reader = new FileReader();
-reader.onload = function(progressEvent){   // read the netlist and display it on the window
+// read the netlist and display it on the window
 	var num = 0;
 	var N = 0;
-	lines = this.result.split('\n');
+	lines = file.split('\n');
 	n=lines.length;
-	//document.getElementById("netlist").innerHTML +="Netlist:\n\n";
 	// find number of nodes and display the netlist in browser 
 	for(var line = 0; line < n; line++){
 		words = lines[line].split(" ");
@@ -70,38 +90,9 @@ reader.onload = function(progressEvent){   // read the netlist and display it on
 			v=parseFloat(words[3]);
 			volt_sources.push({volt:v,n1:n1,n2:n2});
 		}
-	  	document.getElementById("netlist").innerHTML += lines[line]+"\n";
 	}
     no_of_nodes = N+1;
 	
-//-----------------------------------------------------------------------------------
-//                            Display the circuit schematic
-//-----------------------------------------------------------------------------------
-
-var canvas = document.getElementById("myCanvas");
-var connections = math.zeros(no_of_nodes,no_of_nodes);
-var ctx = canvas.getContext("2d");
-ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-var nodes_pos = set_nodes(ctx,no_of_nodes);
-for(var index=0; index<resistors.length; index++){  // resistors
-	var n1=resistors[index].n1;
-	var n2=resistors[index].n2;
-	var r = resistors[index].res;
-	connections=disp_resistor(ctx,nodes_pos,n1,n2,r,connections,no_of_nodes);	
-}
-for(var index=0; index<volt_sources.length; index++){  // voltage sources
-	var n1=volt_sources[index].n1;
-	var n2=volt_sources[index].n2;
-	var v =volt_sources[index].volt;
-	connections=disp_volt(ctx,nodes_pos,n1,n2,v,connections,no_of_nodes);	
-}
-for(var index=0; index<curr_sources.length; index++){  //current sources
-	var n1=curr_sources[index].n1;
-	var n2=curr_sources[index].n2;
-	var i =curr_sources[index].curr;
-	connections=disp_curr(ctx,nodes_pos,n1,n2,i,connections,no_of_nodes);	
-}
 
 //-----------------------------------------------------------------------------------
 //                                   Solve the circuit
@@ -172,36 +163,88 @@ for(var index=0; index<curr_sources.length; index++){  //current sources
 
 	var V = math.concat([0],X.subset(math.index(math.range(0,N-1))),0);  // final voltages at nodes
 
-	// to see all voltages without clicking
+	// display
 	// for(var index=0; index<N; index++){
 	// 	document.getElementById("output").innerHTML += "Voltage at node "+index+" = "+math.subset(V,math.index(index))+"V\n";
 	// }
-	// can also see the currents through the voltage sources
 	// for(var index=1; index<=M; index++){
 	// 	document.getElementById("output").innerHTML += "Current through voltage source "+index+" = "+math.subset(X,math.index(index+N-2))+"A\n";
 	// }
 
 //-----------------------------------------------------------------------------------
-//                             Identify node and show voltage
+//                            Display the circuit schematic
 //-----------------------------------------------------------------------------------
 
+var canvas = document.getElementById("myCanvas");
+var ctx = canvas.getContext("2d");
+var tipCanvas = document.getElementById("tip");   // for tooltip to 
+var tipCtx = tipCanvas.getContext("2d"); 		  // display voltage
+tipCtx.font  = "normal 15px Arial";
+// ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-canvas.addEventListener('click', (e) => {      // identify the node that is clicked
-	var rect = canvas.getBoundingClientRect()
-    var x = e.clientX-rect.left;
-	var y = e.clientY-rect.top;
-	node = detect_node(x,y,nodes_pos,no_of_nodes);
-	if(node>-1){
-		document.getElementById("output").innerHTML +="Node: "+node.toString()+", Voltage: "+math.subset(V,math.index(node)).toFixed(2)+" V\n";
-	}
+var connections = math.zeros(no_of_nodes,no_of_nodes);
+var nodes_pos = set_nodes(ctx,no_of_nodes,V);
+for(var index=0; index<resistors.length; index++){  // resistors
+	var n1=resistors[index].n1;
+	var n2=resistors[index].n2;
+	var r = resistors[index].res;
+	connections=disp_resistor(ctx,nodes_pos,n1,n2,r,connections,no_of_nodes);	
+}
+for(var index=0; index<volt_sources.length; index++){  // voltage sources
+	var n1=volt_sources[index].n1;
+	var n2=volt_sources[index].n2;
+	var v =volt_sources[index].volt;
+	connections=disp_volt(ctx,nodes_pos,n1,n2,v,connections,no_of_nodes);	
+}
+for(var index=0; index<curr_sources.length; index++){  //current sources
+	var n1=curr_sources[index].n1;
+	var n2=curr_sources[index].n2;
+	var i =curr_sources[index].curr;
+	connections=disp_curr(ctx,nodes_pos,n1,n2,i,connections,no_of_nodes);	
+}
+
+
+//-----------------------------------------------------------------------------------
+//                     Show voltage in tooltip when mouse is clicked
+//-----------------------------------------------------------------------------------
+
+var canvasOffset = $("#myCanvas").offset();
+var offsetX = canvasOffset.left;
+var offsetY = canvasOffset.top;
+
+$("#myCanvas").mousemove(function (e) {
+    handleMouseMove(e);
 });
 
+// show tooltip when mouse hovers over dot
+function handleMouseMove(e) {
+	// show tooltip when mouse hovers over dot
+	mouseX = e.pageX - offsetX;
+    mouseY = e.pageY - offsetY;
+
+	// Put your mousemove stuff here
+	var hit = false;
+	node = detect_node(mouseX,mouseY,nodes_pos,no_of_nodes);	
+	if(node>-1){
+		//document.write(node);
+		tipCanvas.style.left = (nodes_pos[node].x)+"px";
+		tipCanvas.style.top = (nodes_pos[node].y - 40)+"px";
+		tipCtx.clearRect(0, 0, tipCanvas.width, tipCanvas.height);
+		tipCtx.fillText(nodes_pos[node].tip, 5, 20);
+		//tipCtx.fillText(nodes_pos[node].x.toString(),5,15);
+		hit = true;
+	}
+	if (!hit) { 
+		tipCanvas.style.left = "-500px"; }
+
+}
+
+
+
 //-----------------------------------------------------------------------------------
-//                        	End of main code
+//                        				End of main code
 //-----------------------------------------------------------------------------------
 
-};
-reader.readAsText(file);
 };
 
 //-----------------------------------------------------------------------------------
@@ -415,7 +458,7 @@ function disp_curr(ctx,nodes_pos,n1,n2,i,connections,N){ // display current sour
 	return connections;
 }
 
-function set_nodes(ctx,n){   // set the nodes on a blank screen
+function set_nodes(ctx,n,V){   // set the nodes on a blank screen
 	var nodes=[];
 	var theta=2*Math.PI/n;
 	var curr_theta=theta;
@@ -425,9 +468,14 @@ function set_nodes(ctx,n){   // set the nodes on a blank screen
     for(var index=0; index<n; index++){
 		var x=x_0+R*Math.sin(curr_theta);
 		var y=y_0+R*Math.cos(curr_theta);
-		nodes.push({x:x,y:y});
+		nodes.push({
+			x:x,
+			y:y,
+			r:6,
+			tip: "Node: "+index.toString()+", Voltage: "+math.subset(V,math.index(index)).toFixed(2).toString()+" V\n"
+		});
 		curr_theta=curr_theta+theta;
-		ctx.moveTo(x+3,y);              // radius of node 
+		ctx.moveTo(x+6,y);              // radius of node 
 		ctx.arc(x,y,6,0,2*Math.PI);     // is 6
 		ctx.fillStyle='red';
 		ctx.fill();
