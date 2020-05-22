@@ -7,13 +7,13 @@ The circuit is solved using <a href="https://www.swarthmore.edu/NatSci/echeeve1/
 
 To run this circuit solver, click <a href="ckt_solver.html">here</a>. You may also download or copy-paste the contents of <a href="https://github.com/adwaygirish/Circuit-solver/blob/master/ckt_solver.html">ckt_solver.html</a>, save it with a .html extension, and open it in a web browser. You should see something like this-<br>
 <center>
-<img src="readme_imgs/on_opening.png" alt="drawing" width="350"/>
+<img src="readme_imgs/on_opening.png" alt="drawing" width="300"/>
 </center>
 
 Enter the netlist and click on the solve button. A circuit diagram is displayed. 
 Now simply move the mouse pointer over the nodes and the voltages at those particular nodes will be displayed like so-
 <center>
-<img src="readme_imgs/after_clicking.png" alt="drawing" width="250"/>
+<img src="readme_imgs/after_clicking.png" alt="drawing" width="400"/>
 </center>
 
 Refresh the page before trying again with a different netlist.
