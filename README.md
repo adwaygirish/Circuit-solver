@@ -13,7 +13,7 @@ To run this circuit solver, click <a href="ckt_solver.html">here</a>. You may al
 Enter the netlist and click on the solve button. A circuit diagram is displayed. 
 Now simply move the mouse pointer over the nodes and the voltages at those particular nodes will be displayed like so-
 <center>
-<img src="readme_imgs/after_clicking.png" alt="drawing" width="600"/>
+<img src="readme_imgs/after_clicking.png" alt="drawing" width="650"/>
 </center>
 
 Refresh the page before trying again with a different netlist.
